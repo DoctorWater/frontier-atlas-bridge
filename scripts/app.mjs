@@ -29,6 +29,7 @@ export class BridgeApp extends ApplicationV2 {
 
   async open(mode) {
     Object.assign(this, { mode, err: "", plan: null, scout: null, result: null, campaign: null });
+    this.busy = true; // до первого render: _preview без плана падает
     this.step = mode === "scout" ? "scout" : mode === "update" ? "preview" : "connect";
     await this.render({ force: true });
     await this.#run(async () => {
@@ -55,8 +56,9 @@ export class BridgeApp extends ApplicationV2 {
     const sub = this.mode === "update" && this.plan ? `<p><strong>${F("FAB.Update.title", { from: canvas.scene.flags[ID].rev ?? "-", to: this.plan.rev })}</strong></p>` : "";
     const err = this.err ? `<p class="err">${esc(this.err)}</p>` : "";
     const body = this.busy ? `<p>${L("FAB.Working")}</p>` : this[`_${this.step}`]();
+    const warn = this.step === "preview" && !game.user.isActiveGM ? `<p class="err">${L("FAB.NotActiveGM")}</p>` : "";
     const auto = this.busy || this.step === "connect" ? "" : `<label class="row auto"><input type="checkbox" data-auto ${game.settings.get(ID, "autoPush") ? "checked" : ""}> ${L("FAB.Auto.label")}</label><p class="muted">${L("FAB.Auto.hint")}</p>`;
-    return `<div class="fab-body">${head}${sub}${err}${body}${auto}</div>`;
+    return `<div class="fab-body">${head}${sub}${err}${warn}${body}${auto}</div>`;
   }
 
   _replaceHTML(result, content) { content.innerHTML = result; }
@@ -86,6 +88,7 @@ export class BridgeApp extends ApplicationV2 {
   }
 
   _preview() {
+    if (!this.plan) return `<footer>${btn("close", "FAB.Close")}</footer>`;
     const p = this.plan, s = p.sel, z = p.zones, sc = p.scene;
     const counts = (d) => F("FAB.Counts", { c: d.create.length, u: d.update.length, d: d.remove.length, s: d.same?.length ?? 0 });
     const box = (key, title, lines, off) => `<div class="cat"><label class="row"><input type="checkbox" data-sel="${key}" ${s[key] && !off ? "checked" : ""} ${off ? "disabled" : ""}> <strong>${L(title)}</strong></label>${lines.filter(Boolean).map((l) => `<p>${l}</p>`).join("")}</div>`;
@@ -99,6 +102,7 @@ export class BridgeApp extends ApplicationV2 {
     const zoneLines = !z.on ? [F("FAB.Zones.off", { why: z.why })] : [
       z.newStorage && L("FAB.Zones.newStorage"),
       F("FAB.Zones.line", { c: m.zonesNew.length, u: m.zonesCells.length, e: m.zonesCleared.length, l: m.linksSet, x: m.linksCleared }),
+      (m.zonesDeferred.length || (!s.tables && p.tables.create.length)) && L("FAB.Zones.deferred"),
       m.bindingsDropped && F("FAB.Zones.dropped", { n: m.bindingsDropped }),
       m.foreign.length && F("FAB.Zones.foreign", { list: m.foreign.join(", ") }),
       L("FAB.Zones.warn")
@@ -153,7 +157,18 @@ export class BridgeApp extends ApplicationV2 {
   }
 
   static async #apply() {
-    await this.#run(async () => { this.result = await apply(this.plan); this.step = "result"; });
+    const mapId = this.plan.mapId;
+    await this.#run(async () => {
+      try {
+        this.result = await apply(this.plan);
+        this.step = "result";
+      } catch (e) {
+        // флаги h уже записаны: свежий план покажет только остаток, повтор не создаст дубли
+        this.plan = await buildPlan(mapId).catch(() => null);
+        throw e;
+      }
+      this.plan = null;
+    });
   }
 
   static async #send() {

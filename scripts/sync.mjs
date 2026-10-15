@@ -1,7 +1,7 @@
 // План (чтение), применение (единственный писатель), разведка и проверка хаба.
 import * as A from "../vendor/atlas.mjs";
 import * as hub from "./hub.mjs";
-import { ID as FLAG, GRHC, hash, cellKeys, hexTargets, noteLabel, bgHash, entryHash, diffItems, diffNotes, newCells, applyBridge, crawlChanged } from "./grid.mjs";
+import { ID as FLAG, GRHC, hash, cellKeys, hexTargets, noteLabel, bgHash, entryHash, diffItems, diffNotes, newCells, sameGeometry, applyBridge, crawlChanged } from "./grid.mjs";
 
 const L = (k) => game.i18n.localize(k);
 const F = (k, d) => game.i18n.format(k, d);
@@ -26,6 +26,8 @@ export const crawlApi = () => { const m = game.modules.get(GRHC); return m?.acti
 /* ---------- общие куски ---------- */
 
 const mine = (coll, mapId, kind) => coll.filter((d) => d.flags?.[FLAG]?.mapId === mapId && d.flags[FLAG].kind === kind);
+const geomOf = (s) => ({ width: s.width, height: s.height, gridType: s.grid.type, gridSize: s.grid.size });
+const targetGeom = (lay) => ({ width: lay.width, height: lay.height, gridType: lay.g.type, gridSize: lay.g.size });
 const tHash = (t) => hash(JSON.stringify(t));
 const pagesOf = (d) => d.pages.filter((p) => p.flags?.[FLAG]?.page).map((p) => ({ kind: p.flags[FLAG].page, name: p.name, content: p.text.content }));
 const docHash = (d) => entryHash(d.name, pagesOf(d));
@@ -70,10 +72,13 @@ async function paintBg(scene, lay) {
   await scene.updateEmbeddedDocuments("Level", [{ _id: scene.initialLevel.id, background: { src } }]);
 }
 
+const resolves = (uuid) => { try { return !!fromUuidSync(uuid); } catch { return false; } };
+
 const crawlCtx = (plan, uuidE, uuidT, removedTables) => ({
   doc: plan.doc, keys: plan.cells.keys, index: plan.cells.index, targets: plan.targets,
   entryUuid: uuidE, tableUuid: uuidT, removedTables,
-  isBridgeUuid: (u) => plan.bridgeUuids.has(u),
+  // нерешаемая ссылка (документ удалён) считается заменяемой, а не чужой
+  isBridgeUuid: (u) => plan.bridgeUuids.has(u) || !resolves(u),
   label: (tid) => { const t = A.terrains.find((x) => x.id === tid); return t ? A.t(t.nameKey) : tid; }
 });
 
@@ -93,7 +98,7 @@ export async function buildPlan(mapId) {
   const sc = pack.scene;
   const bound = mine(game.scenes, mapId, "scene")[0] ?? null;
   // геометрия изменилась — существующую сцену не трогаем, будет новая
-  const recreate = !!bound && (bound.width !== sc.width || bound.height !== sc.height || bound.grid.type !== sc.grid.type || bound.grid.size !== sc.grid.size);
+  const recreate = !!bound && !sameGeometry(geomOf(bound), targetGeom(lay));
   const existing = recreate ? null : bound;
   const have = new Map((existing?.notes ?? []).filter((n) => n.flags?.[FLAG]?.key).map((n) => [n.flags[FLAG].key, { x: n.x, y: n.y, text: n.text }]));
   const notes = diffNotes(pack.entries, have, (e) => noteLabel(e, shown), new Set(journal.create.map((e) => e.key)));
@@ -216,7 +221,7 @@ async function run(plan) {
       const { noteIcon, noteFont, ...data } = sc;
       scene = await cls("Scene").create({ ...data, name: pack.name, folder: f.id, levels: [{ name: pack.name, background: { src } }], flags: flag("scene", "scene", { bg: lay.bg }) });
       // привязка переходит на новую сцену; старая остаётся как есть и больше не обновляется
-      if (plan.scene.bound) await plan.scene.bound.update({ [`flags.-=${FLAG}`]: null });
+      if (plan.scene.bound) await plan.scene.bound.update({ flags: { [FLAG]: new foundry.data.operators.ForcedDeletion() } });
     } else if (plan.scene.bgChanged) await paintBg(scene, lay);
     bgDone = true;
 
@@ -252,6 +257,7 @@ async function run(plan) {
         if (sum.tooBig) throw new Error(F("FAB.Zones.tooBig", { mb: (sum.bytes / 1048576).toFixed(1) }));
         return cfg;
       }, { scene });
+      if (sum.zonesDeferred.length) skipped.zones = true;
       log.push(F("FAB.Log.zones", { c: sum.zonesNew.length, u: sum.zonesCells.length + sum.zonesCleared.length, l: sum.linksSet, x: sum.linksCleared }));
     } catch (e) {
       console.error(FLAG, e);
@@ -281,14 +287,17 @@ export async function scoutCells(scene) {
   if (!api?.exportJson) throw new Error(L("FAB.Zones.noModule"));
   const { doc } = await hub.map(f.mapId);
   const lay = layout(doc);
-  if (scene.grid.type !== lay.g.type || scene.grid.size !== lay.g.size) throw new Error(L("FAB.Err.geometry"));
+  if (!sameGeometry(geomOf(scene), targetGeom(lay))) throw new Error(L("FAB.Err.geometry"));
   const cfg = JSON.parse(await api.exportJson(scene));
   const cells = newCells(cfg.hexes, keysOf(doc, lay.g).index, doc, (key) => console.warn(FLAG, "hex outside the map", key));
+  if (status.state(scene) === "error") checkHub(scene); // хаб ответил: красная кнопка не должна залипать
   return { scene, mapId: f.mapId, cells };
 }
 
 /** Отправляет разведку и перерисовывает фон; flags.rev не трогает (разведка rev не меняет). */
 export const sendScout = (s) => queue(async () => {
+  // геометрию сверяем до отправки: при расхождении не шлём клетки и не рисуем фон
+  if (!sameGeometry(geomOf(s.scene), targetGeom(layout((await hub.map(s.mapId)).doc)))) throw new Error(L("FAB.Err.geometry"));
   await hub.pushExploration(s.mapId, s.cells);
   const { doc } = await hub.map(s.mapId);
   const lay = layout(doc);

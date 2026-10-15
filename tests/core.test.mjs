@@ -6,7 +6,7 @@ import assert from "node:assert/strict";
 import { existsSync } from "node:fs";
 import { pathToFileURL } from "node:url";
 import * as A from "../vendor/atlas.mjs";
-import { hash, cellKeys, hexTargets, noteLabel, bgHash, entryHash, diffItems, diffNotes, newCells, applyBridge, crawlChanged, CRAWL_MAX_BYTES } from "../scripts/grid.mjs";
+import { hash, cellKeys, hexTargets, noteLabel, bgHash, entryHash, diffItems, diffNotes, sameGeometry, newCells, applyBridge, crawlChanged, CRAWL_MAX_BYTES } from "../scripts/grid.mjs";
 import { normalizeUrl } from "../scripts/hub.mjs";
 
 const APP = process.env.FOUNDRY_APP ?? "E:/Foundry VTT v14/resources/app";
@@ -202,4 +202,26 @@ test("applyBridge: превышение лимита размера конфиг
   assert.equal(applyBridge(cfg, ctxFor(doc)).tooBig, false);
   const big = { zones: [], hexes: { pad: { journalUuid: "", notes: "x".repeat(CRAWL_MAX_BYTES) } } };
   assert.equal(applyBridge(big, ctxFor(doc)).tooBig, true);
+});
+
+test("sameGeometry: размер сцены тоже учитывается", () => {
+  const a = { width: 100, height: 80, gridType: 5, gridSize: 52 };
+  assert.ok(sameGeometry(a, { ...a }));
+  for (const k of Object.keys(a)) assert.ok(!sameGeometry(a, { ...a, [k]: a[k] + 1 }));
+});
+
+test("applyBridge: зона не создаётся, пока нет её таблиц", () => {
+  const doc = mkDoc("flat", 3, 2);
+  const cfg = { zones: [], hexes: {} };
+  const sum = applyBridge(cfg, ctxFor(doc, { tableUuid: () => undefined }));
+  assert.deepEqual(sum.zonesDeferred, ["forest"]);
+  assert.deepEqual(sum.zonesNew, ["hills"]);
+  assert.deepEqual(cfg.zones.map((z) => z.id), ["fa-terrain-hills"]);
+});
+
+test("applyBridge: заменяемая (нерешаемая) ссылка гекса перезаписывается", () => {
+  const doc = mkDoc("flat", 3, 2);
+  const cfg = { zones: [], hexes: { k0: { journalUuid: "JournalEntry.dead", notes: "", state: "unknown", visitCount: 0, inheritMode: {}, bindings: emptyBind() } } };
+  applyBridge(cfg, ctxFor(doc, { targets: new Map([[0, "a"]]), entryUuid: () => "JournalEntry.faA", isBridgeUuid: (u) => u === "JournalEntry.dead" }));
+  assert.equal(cfg.hexes.k0.journalUuid, "JournalEntry.faA");
 });

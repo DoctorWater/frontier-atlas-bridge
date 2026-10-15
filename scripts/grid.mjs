@@ -94,6 +94,9 @@ export function newCells(hexes, index, doc, onOutside = () => {}) {
   return cells;
 }
 
+/** Геометрия сцены совпадает с целевой? a, b: {width, height, gridType, gridSize}. */
+export const sameGeometry = (a, b) => a.width === b.width && a.height === b.height && a.gridType === b.gridType && a.gridSize === b.gridSize;
+
 const CATS = ["encounter", "weather", "discovery", "loot", "custom"];
 const emptyBindings = () => Object.fromEntries(CATS.map((c) => [c, []]));
 const emptyHex = () => ({ journalUuid: "", notes: "", state: "unknown", visitCount: 0, inheritMode: Object.fromEntries(CATS.map((c) => [c, "inherit"])), bindings: emptyBindings() });
@@ -106,7 +109,7 @@ const sameSet = (a, b) => a.length === b.length && new Set(a).size === new Set([
  */
 export function applyBridge(cfg, ctx) {
   const { doc, keys } = ctx;
-  const sum = { zonesNew: [], zonesCells: [], zonesCleared: [], bindingsDropped: 0, linksSet: 0, linksCleared: 0, foreign: [], bytes: 0, tooBig: false };
+  const sum = { zonesNew: [], zonesDeferred: [], zonesCells: [], zonesCleared: [], bindingsDropped: 0, linksSet: 0, linksCleared: 0, foreign: [], bytes: 0, tooBig: false };
 
   const cells = new Map();
   doc.terrain.forEach((tid, idx) => { if (tid) { if (!cells.has(tid)) cells.set(tid, []); cells.get(tid).push(keys[idx]); } });
@@ -116,8 +119,10 @@ export function applyBridge(cfg, ctx) {
     mine.delete(id);
     if (!z) {
       // привязки — только при создании зоны; у существующей мастер мог их настроить
-      const encounter = (doc.gm.terrainTables?.[tid] ?? []).map((k) => ctx.tableUuid(k)).filter(Boolean)
-        .map((uuid) => ({ id: `fa${hash(id + uuid)}`, label: "", uuid, trigger: "arrival", chance: 1, once: false, rollMode: "gmroll" }));
+      const uuids = (doc.gm.terrainTables?.[tid] ?? []).map((k) => ctx.tableUuid(k));
+      // нужных таблиц ещё нет: зону не создаём, иначе привязки не появятся никогда (создаются только вместе с зоной)
+      if (uuids.some((u) => !u)) { sum.zonesDeferred.push(tid); continue; }
+      const encounter = uuids.map((uuid) => ({ id: `fa${hash(id + uuid)}`, label: "", uuid, trigger: "arrival", chance: 1, once: false, rollMode: "gmroll" }));
       cfg.zones.push({ id, label: ctx.label(tid), priority: 0, cells: c, bindings: { ...emptyBindings(), encounter } });
       sum.zonesNew.push(tid);
     } else if (!sameSet(z.cells, c)) { z.cells = c; sum.zonesCells.push(tid); }

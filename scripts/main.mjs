@@ -50,17 +50,20 @@ Hooks.on("canvasReady", async (cv) => {
 });
 
 // Автоотправка разведки: гекскраул пишет состояние в журнал-хранилище сцены; шаг без новых гексов — тихий no-op.
-let pending = null;
+const pending = new Set();
 const autoPush = foundry.utils.debounce(async () => {
-  const scene = pending;
-  try {
-    const s = await scoutCells(scene);
-    if (!s.cells.length) return;
-    await sendScout(s);
-    ui.notifications.info(F("FAB.Auto.sent", { n: s.cells.length }));
-  } catch (e) {
-    console.warn(ID, e);
-    status.set(scene, "error", e.message);
+  const scenes = [...pending];
+  pending.clear();
+  for (const scene of scenes) {
+    try {
+      const s = await scoutCells(scene);
+      if (!s.cells.length) continue;
+      await sendScout(s);
+      ui.notifications.info(F("FAB.Auto.sent", { n: s.cells.length }));
+    } catch (e) {
+      console.warn(ID, e);
+      status.set(scene, "error", e.message);
+    }
   }
 }, 2000);
 
@@ -68,6 +71,6 @@ Hooks.on("updateJournalEntry", (journal) => {
   if (!game.user.isGM || !game.settings.get(ID, "autoPush") || !getToken() || !game.modules.get(GRHC)?.active) return;
   const scene = game.scenes.find((s) => bound(s) && s.flags[GRHC]?.locator?.storageJournalUuid === journal.uuid);
   if (!scene) return;
-  pending = scene;
+  pending.add(scene);
   autoPush();
 });

@@ -49,6 +49,8 @@
   "FAB.Zones.dropped": "Deleted roll tables are removed from {n} zone bindings.",
   "FAB.Zones.foreign": "Hexes with your own journal link stay as they are: {list}",
   "FAB.Zones.warn": "The zones fa-terrain-* are repainted by the hub terrain. Bindings, label and priority you configured stay untouched.",
+  "FAB.Zones.deferred": "New zones that need roll tables are skipped until those tables exist (tick Roll tables).",
+  "FAB.NotActiveGM": "You are not the active GM: serialization with the hexcrawl arrival handling is guaranteed only on the active GM's client. Apply from there.",
   "FAB.Conflicts.title": "Changed in Foundry",
   "FAB.Conflicts.hint": "These journal entries were edited in Foundry and the hub changed them too. By default they are not touched; tick to replace them with the hub version.",
   "FAB.Nothing": "Nothing to change.",
