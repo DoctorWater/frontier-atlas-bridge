@@ -1,0 +1,18 @@
+/* Цвет кнопки группы по состоянию связи с хабом (data-fab-status ставит renderSceneControls) */
+button.layer[data-fab-status="synced"] { color: #6cbf6c; }
+button.layer[data-fab-status="update"] { color: #f0a030; }
+button.layer[data-fab-status="error"] { color: #e05050; }
+button.layer[data-fab-status="unbound"], button.layer[data-fab-status="unknown"] { opacity: 0.7; }
+
+.fab .fab-body { padding: 0.75rem; display: flex; flex-direction: column; gap: 0.5rem; }
+.fab .steps { display: flex; gap: 0.75rem; font-size: 0.8rem; opacity: 0.7; }
+.fab .steps .on { font-weight: 700; opacity: 1; }
+.fab label.row { display: flex; gap: 0.5rem; align-items: center; }
+.fab label.row input[type=text], .fab label.row input[type=password] { flex: 1; }
+.fab .cat { border: 1px solid var(--color-border-dark-4, #555); border-radius: 4px; padding: 0.4rem 0.6rem; }
+.fab .cat.warn { border-color: #f0a030; }
+.fab .cat p, .fab-body > p { margin: 0.2rem 0; }
+.fab .cat p { font-size: 0.85rem; }
+.fab .err { color: #e05050; }
+.fab .muted { opacity: 0.7; font-size: 0.8rem; }
+.fab footer { display: flex; justify-content: flex-end; gap: 0.5rem; }

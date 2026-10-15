@@ -1,0 +1,17 @@
+{
+  "id": "frontier-atlas-bridge",
+  "title": "Frontier Atlas Bridge",
+  "description": "Bridge between the Frontier Atlas hub and Foundry VTT: map, journal, roll tables and hexcrawl zones from the hub; scouting back to the hub.",
+  "version": "0.1.0",
+  "authors": [{ "name": "Frontier Atlas" }],
+  "compatibility": { "minimum": "14.360", "verified": "14.360" },
+  "esmodules": ["scripts/main.mjs"],
+  "styles": ["styles/bridge.css"],
+  "languages": [
+    { "lang": "en", "name": "English", "path": "lang/en.json" },
+    { "lang": "ru", "name": "Русский", "path": "lang/ru.json" }
+  ],
+  "relationships": {
+    "recommends": [{ "id": "great-route-hex-crawl", "type": "module" }]
+  }
+}
