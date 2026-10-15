@@ -31,9 +31,13 @@ const targetGeom = (lay) => ({ width: lay.width, height: lay.height, gridType: l
 const tHash = (t) => hash(JSON.stringify(t));
 const pagesOf = (d) => d.pages.filter((p) => p.flags?.[FLAG]?.page).map((p) => ({ kind: p.flags[FLAG].page, name: p.name, content: p.text.content }));
 const docHash = (d) => entryHash(d.name, pagesOf(d));
-// текст записи зависит от того, у каких гексов есть заметки ([[14.08]] — ссылка, только если цель есть)
-const eHash = (e, hexKeys) => hash(JSON.stringify(e) + hexKeys + L("FAB.Secret"));
-const hexKeysOf = (entries) => entries.map((e) => `${e.col},${e.row}`).sort().join(";");
+// текст записи зависит от того, есть ли заметки у гексов, на которые она ссылается ([[14.08]] — ссылка, только если цель есть)
+const eHash = (e, hexKeys) => {
+  const s = JSON.stringify(e);
+  const refs = [...new Set([...s.matchAll(/data-hex=\\"(\d+,\d+)\\"/g)].map((m) => m[1]))].sort();
+  return hash(s + refs.map((k) => k + (hexKeys.has(k) ? "+" : "-")).join(";") + L("FAB.Secret"));
+};
+const hexKeysOf = (entries) => new Set(entries.map((e) => `${e.col},${e.row}`));
 
 function layout(doc) {
   const { width: ww, height: wh } = A.worldSize(doc, doc.cols, doc.rows);
@@ -208,8 +212,14 @@ async function run(plan) {
       await d.update({ flags: flag("entry", e.key, { h: eHash(e, hexKeys), hd: docHash(d) }) });
     }
     for (const k of remove) if (ow || !conflicts.has(k)) { await edoc.get(k).delete(); edoc.delete(k); }
-    skipped.journal = conflicts.size > 0 && !ow;
-    log.push(F("FAB.Log.journal", { c: create.length, u: todo.length - create.length, d: remove.length, k: skipped.journal ? conflicts.size : 0 }));
+    // оставленная без галочки правка — решение мастера, а не сбой: запоминаем версию хаба (h), hd не трогаем —
+    // следующее изменение в хабе снова даст конфликт; удалённая в хабе запись отвязывается и остаётся мастеру
+    const kept = ow ? 0 : conflicts.size;
+    if (kept) {
+      for (const e of update) if (conflicts.has(e.key)) await edoc.get(e.key).update({ [`flags.${FLAG}.h`]: eHash(e, hexKeys) });
+      for (const k of remove) if (conflicts.has(k)) { await edoc.get(k).update({ flags: { [FLAG]: new foundry.data.operators.ForcedDeletion() } }); edoc.delete(k); }
+    }
+    log.push(F("FAB.Log.journal", { c: create.length, u: todo.length - create.length, d: remove.filter((k) => ow || !conflicts.has(k)).length, k: kept }));
   }
 
   // сцена: фон, метки; жетоны, стены, рисунки и состояние гекскраула не трогаем
