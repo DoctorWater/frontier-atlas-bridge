@@ -1,13 +1,19 @@
 # Frontier Atlas Bridge
 
-Модуль Foundry VTT v14 (проверен на 14.360): мост между хабом Frontier Atlas и сценой Foundry. Только для мастера, игроки модуль не видят.
+Модуль Foundry VTT v14 (проверен на 14.360 и 14.366): мост между хабом Frontier Atlas и сценой Foundry. Только для мастера, игроки модуль не видят.
 
 - **Хаб → Foundry.** Карта игроков (только разведанное и открытое) становится фоном сцены; заметки — записями журнала (секрет — на скрытой странице), таблицы — RollTable. С модулем `great-route-hex-crawl` 0.3.0+ ещё настраиваются зоны по местностям и ссылки гексов на журнал. Повторное получение **обновляет на месте**: жетоны, стены, рисунки и состояние гекскраула не трогаются.
 - **Foundry → хаб.** Гексы, которые гекскраул пометил как `discovered` / `visited` / `cleared`, уходят в хаб как разведанные (только открывают). После отправки фон сцены перерисовывается.
 
 ## Установка
 
-Скопируйте папку модуля в `Data/modules/frontier-atlas-bridge` или подключите junction (из `cmd`):
+В Foundry: «Дополнения» → «Установить модуль» → поле «URL манифеста»:
+
+```
+https://github.com/DoctorWater/frontier-atlas-bridge/releases/latest/download/module.json
+```
+
+Для разработки — скопируйте папку модуля в `Data/modules/frontier-atlas-bridge` или подключите junction (из `cmd`):
 
 ```
 mklink /J "%LOCALAPPDATA%\FoundryVTT\Data\modules\frontier-atlas-bridge" "D:\ClaudeFun\frontier-atlas-bridge"
@@ -60,3 +66,9 @@ mklink /J "%LOCALAPPDATA%\FoundryVTT\Data\modules\frontier-atlas-bridge" "D:\Cla
 - Таблицы изменения в Foundry не отслеживают (правьте их в хабе); `gm.notes[].tables` к гексам не привязываются.
 - Хаб по `http://` недоступен из Foundry, открытого по `https://` (блокировка смешанного содержимого браузером).
 - Токен хранится открытым текстом в localStorage браузера мастера.
+
+## Выпуск версии
+
+1. Поднять `version` и `download` (`…/releases/download/vX.Y.Z/module.zip`) в `module.json`, при новом хабе — пересобрать `vendor/atlas.mjs` (`npm run build:bridge-vendor` в репозитории хаба).
+2. `git commit`, `git tag vX.Y.Z`, `git push --follow-tags`.
+3. GitHub Actions (`.github/workflows/release.yml`) сверит тег с `module.json`, прогонит тесты и выложит релиз с `module.json` и `module.zip`. Foundry увидит обновление по манифесту.
