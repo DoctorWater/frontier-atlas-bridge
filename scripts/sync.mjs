@@ -33,7 +33,7 @@ const pagesOf = (d) => d.pages.filter((p) => p.flags?.[FLAG]?.page).map((p) => (
 const docHash = (d) => entryHash(d.name, pagesOf(d));
 // текст записи зависит от того, есть ли заметки у гексов, на которые она ссылается ([[14.08]] — ссылка, только если цель есть)
 const eHash = (e, hexKeys) => {
-  const s = JSON.stringify(e);
+  const s = JSON.stringify([e.name, e.body, e.secret]);   // x/y и подпись — дело меток, они сравниваются отдельно
   const refs = [...new Set([...s.matchAll(/data-hex=\\"(\d+,\d+)\\"/g)].map((m) => m[1]))].sort();
   return hash(s + refs.map((k) => k + (hexKeys.has(k) ? "+" : "-")).join(";") + L("FAB.Secret"));
 };
